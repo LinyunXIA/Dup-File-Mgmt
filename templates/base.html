@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}文件去重管理{% endblock %}</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <nav class="nav-bar">
+        <div class="nav-inner">
+            <a href="/" class="nav-brand">📂 文件去重管理</a>
+            <div class="nav-links">
+                <a href="/duplicates" class="nav-link">重复文件</a>
+                <a href="/explorer" class="nav-link">资源管理器</a>
+                <a href="/tasks" class="nav-link">Task 页面</a>
+            </div>
+        </div>
+    </nav>
+
+    <div id="global-status" class="global-status" style="display:none;">
+        <div class="global-status-inner">
+            <span id="status-text"></span>
+            <button id="status-action-btn" class="btn btn-sm" style="display:none;" onclick="goAction()">去处理</button>
+        </div>
+    </div>
+
+    <main class="main-content">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Command modal -->
+    <div id="command-modal" class="modal" style="display:none;">
+        <div class="modal-backdrop" onclick="closeCommandModal()"></div>
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <h3 id="command-modal-title">操作命令</h3>
+                <button class="modal-close" onclick="closeCommandModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <pre id="command-text" class="command-pre"></pre>
+                <div id="command-task-id" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn" onclick="copyCommand()">📋 复制命令</button>
+                <button id="command-execute-btn" class="btn btn-primary" onclick="confirmExecuted()">✅ 已执行</button>
+                <button class="btn btn-secondary" onclick="closeCommandModal()">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Generic modal -->
+    <div id="generic-modal" class="modal" style="display:none;">
+        <div class="modal-backdrop" onclick="closeGenericModal()"></div>
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="generic-modal-title">提示</h3>
+                <button class="modal-close" onclick="closeGenericModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="generic-modal-body"></div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="closeGenericModal()">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>

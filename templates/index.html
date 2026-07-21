@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}文件去重管理 - 首页{% endblock %}
+{% block content %}
+<div class="page-container">
+    <div class="hero">
+        <h1>📂 文件去重管理系统</h1>
+        <p class="hero-desc">导入文件服务器 MD5 列表 → 查重整理 → 生成 shell 命令 → 服务器执行</p>
+    </div>
+
+    <div class="card-grid">
+        <a href="/duplicates" class="card card-link">
+            <div class="card-icon">🔍</div>
+            <h2>重复文件</h2>
+            <p>导入 md5_list.txt，查看 MD5 重复组和同名文件，批量生成删除命令。</p>
+            <ul class="card-features">
+                <li>📥 导入文件列表</li>
+                <li>🔁 MD5 重复检测</li>
+                <li>📝 同名文件扫描</li>
+                <li>🗑 批量生成 rm 命令</li>
+            </ul>
+        </a>
+
+        <a href="/explorer" class="card card-link">
+            <div class="card-icon">📁</div>
+            <h2>资源管理器</h2>
+            <p>按目录浏览文件，搜索、移动、删除。播放预览文件内容。</p>
+            <ul class="card-features">
+                <li>🌲 目录树浏览</li>
+                <li>🔎 文件搜索</li>
+                <li>📁 批量移动文件</li>
+                <li>▶️ 播放预览</li>
+            </ul>
+        </a>
+    </div>
+
+    <div class="workflow-section">
+        <h2>工作流程</h2>
+        <div class="workflow-steps">
+            <div class="step">
+                <div class="step-num">1</div>
+                <div class="step-body">
+                    <h3>在文件服务器生成列表</h3>
+                    <code>find /volume1 -type f -exec md5sum {} \; > md5_list.txt</code>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-num">2</div>
+                <div class="step-body">
+                    <h3>上传到本工具</h3>
+                    <p>打开 <strong>重复文件</strong> 页面 → 点击 📥 导入 → 上传 md5_list.txt</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-num">3</div>
+                <div class="step-body">
+                    <h3>查重 &amp; 整理</h3>
+                    <p>查看重复组，勾选要删除的文件。或在资源管理器浏览、搜索、移动。</p>
+                </div>
+            </div>
+            <div class="step">
+                <div class="step-num">4</div>
+                <div class="step-body">
+                    <h3>生成命令 &amp; 执行</h3>
+                    <p>点"生成命令" → 复制 → 贴到服务器终端执行 → 回本工具点"已执行"</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="philosophy-section">
+        <blockquote>
+            <p>💡 <strong>设计哲学：</strong>系统是只读元数据库 + 命令生成器，操作权永远在用户手里。</p>
+            <p>系统从不直接 rm/mv 文件，只生成命令。审计日志永久保留，可回溯。</p>
+        </blockquote>
+    </div>
+</div>
+{% endblock %}
