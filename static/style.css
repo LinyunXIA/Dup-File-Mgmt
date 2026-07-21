@@ -318,8 +318,43 @@ code {
 }
 .dir-item:hover { background: #f0f0f0; }
 .dir-item.active { background: #e8f0fe; font-weight: 500; }
-.dir-item .dir-label { display: flex; align-items: center; gap: 6px; }
-.dir-item .dir-count { color: #888; font-size: 0.82em; }
+
+/* ── Tree Structure ─────────────────────────────────────────────── */
+.tree-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 8px;
+    cursor: pointer;
+    font-size: 0.85em;
+    transition: background 0.1s;
+    white-space: nowrap;
+}
+.tree-item:hover { background: #f0f0f0; }
+.tree-item.active { background: #e8f0fe; font-weight: 500; }
+.tree-item .dir-label {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.tree-item .dir-count { color: #888; font-size: 0.82em; margin-left: auto; padding-left: 6px; }
+.tree-toggle {
+    flex-shrink: 0;
+    width: 16px;
+    text-align: center;
+    font-size: 0.75em;
+    color: #888;
+    cursor: pointer;
+    user-select: none;
+}
+.tree-toggle:hover { color: #333; }
+.tree-toggle-placeholder {
+    flex-shrink: 0;
+    width: 16px;
+    display: inline-block;
+}
+.tree-children { display: none; }
+.tree-branch { }
 
 .explorer-toolbar {
     display: flex;
@@ -431,10 +466,14 @@ code {
 /* ── Move Dir List ─────────────────────────────────────────────────── */
 .move-dir-list { max-height: 300px; overflow-y: auto; border: 1px solid #e0e0e0; border-radius: 6px; }
 .move-dir-item {
-    padding: 8px 12px;
+    padding: 6px 12px;
     cursor: pointer;
     font-size: 0.88em;
     transition: background 0.1s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
 }
 .move-dir-item:hover { background: #f0f0f0; }
 .move-dir-item.selected { background: #e8f0fe; font-weight: 500; }

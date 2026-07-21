@@ -38,8 +38,9 @@ def parse_line(line: str) -> Optional[tuple[str, str]]:
 def do_import(file_stream, mode: str = "first") -> dict:
     """Import an uploaded md5_list.txt file.
 
-    mode='first' (Phase 1): full import, INSERT ON CONFLICT UPDATE.
-    mode='incremental' (Phase 2): filter out lines whose MD5 already exists.
+    mode='first': full import, INSERT ON CONFLICT UPDATE.
+    mode='incremental': same as first — import all files regardless of MD5.
+        Duplicate MD5 detection is handled after import on the duplicates page.
     """
     start = time.time()
     conn = get_db()
@@ -49,7 +50,6 @@ def do_import(file_stream, mode: str = "first") -> dict:
     skipped_ds_store = 0
     errors = 0
     total_lines = 0
-    filtered_by_existing_md5 = 0
 
     # Phase: collect all parsed lines
     parsed: list[tuple[str, str]] = []
@@ -79,27 +79,8 @@ def do_import(file_stream, mode: str = "first") -> dict:
         md5, path = result
         parsed.append((md5, path))
 
-    # For incremental mode: filter out MD5s already in DB
-    if mode == "incremental" and parsed:
-        existing_md5s = set()
-        # Batch query existing MD5s
-        all_md5s = [p[0] for p in parsed]
-        # Query in chunks to avoid SQL parameter limits
-        chunk_size = 500
-        for i in range(0, len(all_md5s), chunk_size):
-            chunk = all_md5s[i : i + chunk_size]
-            placeholders = ",".join("?" for _ in chunk)
-            rows = conn.execute(
-                f"SELECT DISTINCT md5 FROM files WHERE md5 IN ({placeholders})",
-                chunk,
-            ).fetchall()
-            existing_md5s.update(r["md5"] for r in rows)
-
-        before = len(parsed)
-        parsed = [(m, p) for m, p in parsed if m not in existing_md5s]
-        filtered_by_existing_md5 = before - len(parsed)
-
-    # Batch insert
+    # Batch insert (both first and incremental import all files;
+    # duplicate MD5 detection happens on the duplicates page)
     conn.execute("BEGIN TRANSACTION")
     try:
         for i in range(0, len(parsed), BATCH_SIZE):
@@ -139,5 +120,4 @@ def do_import(file_stream, mode: str = "first") -> dict:
         "errors": errors,
         "total_lines": total_lines,
         "elapsed_ms": elapsed_ms,
-        "filtered_by_existing_md5": filtered_by_existing_md5,
     }

@@ -2,3 +2,4 @@ sample.txt
 .venv/*
 config.json
 CLAUDE.md
+data/*

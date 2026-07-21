@@ -86,6 +86,17 @@ async function checkLockBeforeAction() {
 function showMessage(html) {
     document.getElementById('generic-modal-title').textContent = '提示';
     document.getElementById('generic-modal-body').innerHTML = html;
+    document.getElementById('generic-modal-action-btn').style.display = 'none';
+    document.getElementById('generic-modal').style.display = 'flex';
+}
+
+function showMessageWithButton(html, btnText, btnCallback) {
+    document.getElementById('generic-modal-title').textContent = '提示';
+    document.getElementById('generic-modal-body').innerHTML = html;
+    const actionBtn = document.getElementById('generic-modal-action-btn');
+    actionBtn.textContent = btnText;
+    actionBtn.style.display = 'inline-block';
+    actionBtn.onclick = btnCallback;
     document.getElementById('generic-modal').style.display = 'flex';
 }
 
@@ -298,9 +309,19 @@ function closeImportModal() {
 	            // Show brief summary as message
 	            let msg = `✅ 导入完成：新增 ${data.inserted}，更新 ${data.updated}`;
 	            if (data.skipped_ds_store > 0) msg += `，跳过 .DS_Store ${data.skipped_ds_store}`;
-	            if (data.filtered_by_existing_md5 > 0) msg += `，过滤已有 MD5 ${data.filtered_by_existing_md5}`;
 	            msg += `（${data.elapsed_ms}ms）`;
-	            showMessage(msg);
+
+	            // If there are MD5 duplicate files, show a delete button
+	            const dupIds = data.duplicate_ids || [];
+	            if (dupIds.length > 0) {
+	                msg += `<br><br>🔁 发现 <strong>${dupIds.length}</strong> 个 MD5 重复文件`;
+	                showMessageWithButton(msg, '🗑 删除MD5重复的文件', function() {
+	                    closeGenericModal();
+	                    generateRmWithIds(dupIds);
+	                });
+	            } else {
+	                showMessage(msg);
+	            }
 	        }
 	    } catch (e) {
 	        showMessage('导入失败: ' + e.message);
@@ -415,6 +436,46 @@ function sameNameSingleDelete(fileId) {
         onSameNameCheckChange();
     }
     generateRmFromSameName();
+}
+
+async function generateRmWithIds(ids) {
+    if (!ids || ids.length === 0) return;
+
+    await pollStatus();
+    if (readonly) {
+        showMessage('系统处于只读模式，请修改 config.json 中 readonly 为 false');
+        return;
+    }
+    if (pendingTaskExists) {
+        showMessage('有 pending task 未处理，请先完成或取消。');
+        return;
+    }
+
+    try {
+        const res = await fetch('/api/generate-rm', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ids }),
+        });
+        const data = await res.json();
+
+        if (data.error) {
+            showMessage(data.error);
+            return;
+        }
+
+        currentTaskId = data.task_id;
+        document.getElementById('command-modal-title').textContent = `🗑 删除命令 (${data.count} 个文件)`;
+        document.getElementById('command-text').textContent = data.command;
+        document.getElementById('command-task-id').textContent = data.task_id;
+        document.getElementById('command-modal').style.display = 'flex';
+        document.getElementById('command-execute-btn').disabled = false;
+        document.getElementById('command-execute-btn').onclick = confirmExecuted;
+
+        pollStatus();
+    } catch (e) {
+        showMessage('生成命令失败: ' + e.message);
+    }
 }
 
 async function confirmExecuted() {
@@ -632,24 +693,79 @@ async function loadTree() {
             <span class="dir-count">${data.total_files}</span>
         </div>`;
 
-        for (const dir of data.directories) {
-            const active = dir.path === currentDir ? 'active' : '';
-            html += `<div class="dir-item ${active}" onclick="selectDir('${escHtml(dir.path)}')">
-                <span class="dir-label">📁 ${escHtml(dir.path)}</span>
-                <span class="dir-count">${dir.count}</span>
-            </div>`;
-        }
+        // Build tree from flat directories
+        const root = buildDirTree(data.directories);
+        html += renderDirTree(root, 0, '');
+
         tree.innerHTML = html;
     } catch (e) {
         document.getElementById('directory-tree').innerHTML = '<div class="no-results">加载失败</div>';
     }
 }
 
-function selectDir(dir) {
-    currentDir = dir;
-    document.querySelectorAll('.dir-item').forEach(el => el.classList.remove('active'));
-    event.currentTarget.classList.add('active');
-    document.getElementById('current-dir-name').textContent = dir || '全部文件';
+function buildDirTree(directories) {
+    const root = { name: '', path: '', children: {}, count: 0 };
+
+    for (const dir of directories) {
+        const parts = dir.path.split('/').filter(Boolean);
+        let node = root;
+        let accumulatedPath = '';
+        for (const part of parts) {
+            accumulatedPath += '/' + part;
+            if (!node.children[part]) {
+                node.children[part] = { name: part, path: accumulatedPath, children: {}, count: 0 };
+            }
+            node.children[part].count += dir.count;
+            node = node.children[part];
+        }
+    }
+    return root;
+}
+
+function renderDirTree(node, depth, parentPath) {
+    let html = '';
+    // Sort children by name
+    const names = Object.keys(node.children).sort((a, b) => a.localeCompare(b));
+    for (const name of names) {
+        const child = node.children[name];
+        const active = child.path === currentDir ? 'active' : '';
+        // Determine if this path (or any parent) is currently expanded
+        // Initially: auto-expand ancestors of currentDir, collapse others
+        const isExpanded = currentDir && currentDir.startsWith(child.path) ? 'expanded' : '';
+        const hasChildren = Object.keys(child.children).length > 0;
+
+        html += `<div class="tree-branch">`;
+        html += `<div class="tree-item ${active}" data-path="${escHtml(child.path)}" style="padding-left:${depth * 20 + 8}px">
+            ${hasChildren ? `<span class="tree-toggle ${isExpanded}" onclick="event.stopPropagation();toggleTreeBranch(this)">${isExpanded ? '▾' : '▸'}</span>` : '<span class="tree-toggle-placeholder"></span>'}
+            <span class="dir-label" onclick="selectDirTree('${escHtml(child.path)}')">📁 ${escHtml(child.name)}</span>
+            <span class="dir-count">${child.count}</span>
+        </div>`;
+        if (hasChildren) {
+            html += `<div class="tree-children" style="display:${isExpanded ? 'block' : 'none'}">`;
+            html += renderDirTree(child, depth + 1, child.path);
+            html += `</div>`;
+        }
+        html += `</div>`;
+    }
+    return html;
+}
+
+function toggleTreeBranch(el) {
+    const childrenContainer = el.closest('.tree-branch').querySelector('.tree-children');
+    if (!childrenContainer) return;
+    const isHidden = childrenContainer.style.display === 'none';
+    childrenContainer.style.display = isHidden ? 'block' : 'none';
+    el.textContent = isHidden ? '▾' : '▸';
+    el.classList.toggle('expanded', isHidden);
+}
+
+function selectDirTree(path) {
+    currentDir = path;
+    document.querySelectorAll('.tree-item, .dir-item').forEach(el => el.classList.remove('active'));
+    const item = document.querySelector(`.tree-item[data-path="${path}"]`) ||
+                 document.querySelector(`.dir-item:first-child`);
+    if (item) item.classList.add('active');
+    document.getElementById('current-dir-name').textContent = path || '全部文件';
     document.getElementById('file-search').value = '';
     loadFiles();
 }
@@ -790,16 +906,41 @@ async function batchMove() {
         const res = await fetch('/api/tree');
         const data = await res.json();
         const list = document.getElementById('move-dir-list');
-        let html = '';
-        for (const dir of data.directories) {
-            html += `<div class="move-dir-item" onclick="selectMoveDir('${escHtml(dir.path)}', this)">📁 ${escHtml(dir.path)} (${dir.count})</div>`;
-        }
+        const root = buildDirTree(data.directories);
+        let html = renderMoveDirTree(root, 0);
         list.innerHTML = html || '<div class="no-results">没有可用目录</div>';
     } catch (e) {
         document.getElementById('move-dir-list').innerHTML = '<div class="no-results">加载失败</div>';
     }
 
     document.getElementById('move-modal').style.display = 'flex';
+}
+
+function renderMoveDirTree(node, depth) {
+    let html = '';
+    const names = Object.keys(node.children).sort((a, b) => a.localeCompare(b));
+    for (const name of names) {
+        const child = node.children[name];
+        const hasChildren = Object.keys(child.children).length > 0;
+        html += `<div class="move-dir-item" style="padding-left:${depth * 20 + 8}px" onclick="selectMoveDir('${escHtml(child.path)}', this)">
+            ${hasChildren ? '<span class="tree-toggle expanded" onclick="event.stopPropagation();toggleMoveTree(this)">▾</span>' : '<span class="tree-toggle-placeholder"></span>'}
+            📁 ${escHtml(child.name)} (${child.count})
+        </div>`;
+        if (hasChildren) {
+            html += `<div class="tree-children">`;
+            html += renderMoveDirTree(child, depth + 1);
+            html += `</div>`;
+        }
+    }
+    return html;
+}
+
+function toggleMoveTree(el) {
+    const childrenContainer = el.closest('.move-dir-item').nextElementSibling;
+    if (!childrenContainer || !childrenContainer.classList.contains('tree-children')) return;
+    const isHidden = childrenContainer.style.display === 'none';
+    childrenContainer.style.display = isHidden ? 'block' : 'none';
+    el.textContent = isHidden ? '▾' : '▸';
 }
 
 function selectMoveDir(dir, el) {
@@ -812,9 +953,38 @@ function selectMoveDir(dir, el) {
 
 function filterMoveDirs() {
     const q = document.getElementById('move-search').value.trim().toLowerCase();
+
+    // First pass: show/hide items based on match
     document.querySelectorAll('.move-dir-item').forEach(el => {
         const text = el.textContent.toLowerCase();
-        el.style.display = q === '' || text.includes(q) ? 'flex' : 'none';
+        const match = q === '' || text.includes(q);
+        el.style.display = match ? '' : 'none';
+
+        // If item matches and has a tree-children sibling, expand it
+        if (match && q !== '') {
+            const children = el.nextElementSibling;
+            if (children && children.classList.contains('tree-children')) {
+                children.style.display = 'block';
+                const toggle = el.querySelector('.tree-toggle');
+                if (toggle) { toggle.textContent = '▾'; toggle.classList.add('expanded'); }
+            }
+        }
+    });
+
+    // Second pass: ensure parent branches of matching items are visible
+    document.querySelectorAll('.move-dir-item').forEach(el => {
+        if (el.style.display !== 'none') {
+            let parent = el.parentElement;
+            while (parent && parent.classList.contains('tree-children')) {
+                parent.style.display = 'block';
+                // Find the parent move-dir-item that owns this tree-children
+                const sibling = parent.previousElementSibling;
+                if (sibling && sibling.classList.contains('move-dir-item')) {
+                    sibling.style.display = '';
+                }
+                parent = parent.parentElement;
+            }
+        }
     });
 }
 

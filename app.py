@@ -682,8 +682,22 @@ def api_import():
 
     mode = request.form.get("mode", "first")
 
-    # Read file content as stream
     result = do_import(uploaded.stream, mode=mode)
+
+    # After import, find files that are now in MD5 duplicate groups
+    if result.get("inserted", 0) > 0:
+        conn = get_db()
+        dup_rows = conn.execute("""
+            SELECT f1.id FROM files f1
+            WHERE f1.md5 IN (
+                SELECT md5 FROM files GROUP BY md5 HAVING COUNT(*) > 1
+            )
+            ORDER BY f1.id
+        """).fetchall()
+        result["duplicate_ids"] = [r["id"] for r in dup_rows]
+    else:
+        result["duplicate_ids"] = []
+
     return jsonify(result)
 
 
